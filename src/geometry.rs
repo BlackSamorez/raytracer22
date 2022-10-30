@@ -11,8 +11,8 @@ use vector::Vector3D;
 static EPSILON: f64 = 1e-5;
 
 pub fn get_intersection(ray: &Ray, polygon: &Polygon) -> Option<Intersection> {
-    let first_edge = polygon.second_point.as_ref() - polygon.first_point.as_ref();
-    let second_edge = polygon.third_point.as_ref() - polygon.first_point.as_ref();
+    let first_edge = &polygon.second_point - &polygon.first_point;
+    let second_edge = &polygon.third_point - &polygon.first_point;
     let h = ray.direction.cross(&second_edge);
     let a = &h * &second_edge;
 
@@ -21,7 +21,7 @@ pub fn get_intersection(ray: &Ray, polygon: &Polygon) -> Option<Intersection> {
     }
 
     let f = 1.0 / a;
-    let s = &ray.from - polygon.first_point.as_ref();
+    let s = &ray.from - &polygon.first_point;
     let u = f * (&s * &h);
     if u < 0.0 || u > 1.0 {
         return None;

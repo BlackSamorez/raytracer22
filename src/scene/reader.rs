@@ -1,12 +1,15 @@
 use crate::geometry::vector::Vector3D;
 use crate::scene::Scene;
 use crate::scene::CubeMap;
+use crate::geometry::polygon::Polygon;
+use crate::scene::material::Material;
+use crate::scene::object::{Object, PseudoObject};
 
 use std::fs::File;
 use std::io::{self, prelude::*, BufReader};
-use std::sync::Arc;
-use crate::scene::material::Material;
-use crate::scene::object::Object;
+use std::ops::{AddAssign, Deref, DerefMut, Sub};
+use std::rc::{Rc, Weak};
+
 
 fn read_point(triplet: &[&str]) -> Vector3D {
     assert!(triplet.len() >= 3);
@@ -27,16 +30,17 @@ fn read_indices_pairs(face_elements: &[&str]) -> Vec<(usize, usize)> {
     result
 }
 
-pub fn read_scene(finelame: &str) -> Scene{
-    let file = File::open(finelame).expect(&format!("Couldn't open scene file: {}", finelame));
+pub fn read_scene(filename: &str) -> Scene {
+    let file = File::open(filename).expect(&format!("Couldn't open scene file: {}", filename));
     let reader = BufReader::new(file);
 
-    let mut vertices: Vec<Arc<Vector3D>> = vec![];
-    let mut normals: Vec<Arc<Vector3D>> = vec![];
-    let mut dynamic_normals: Vec<(Arc<Vector3D>, usize)> = vec![];
-    let mut materials: Vec<Arc<Material>> = vec![];
-    let mut objects: Vec<Object> = vec![];
+    let mut vertices: Vec<Vector3D> = vec![];
+    let mut read_normals: Vec<Vector3D> = vec![];
+    let mut assigned_normals: Vec<Vector3D> = vec![];
+    let mut materials: Vec<Rc<Material>> = vec![];
+    let mut pseudo_objects: Vec<PseudoObject> = vec![];
     let mut cube_map = None;
+    let mut current_material: Option<Rc<Material>> = None;
 
     for (n, line) in reader.lines().enumerate() {
         let line = line.unwrap();
@@ -46,9 +50,12 @@ pub fn read_scene(finelame: &str) -> Scene{
             continue;
         }
         match tokens.as_slice() {
-            ["v", body @ ..] => vertices.push(Arc::new(read_point(body))),
+            ["v", body @ ..] => {
+                vertices.push(read_point(body));
+                assigned_normals.push(Vector3D::default());
+            },
             ["vt", ..] => continue,
-            ["vn", body @ ..] => normals.push(Arc::new(read_point(body))),
+            ["vn", body @ ..] => read_normals.push(read_point(body)),
             ["f", body @ ..] => {
                 let indices_pairs = read_indices_pairs(body);
                 assert!(indices_pairs.len() >= 3);
@@ -58,15 +65,36 @@ pub fn read_scene(finelame: &str) -> Scene{
                 assert!(no_normals || all_normals, "Either all point should have normals or none should");
 
                 let first_pair = indices_pairs[0];
+                let first_point_idx = if first_pair.0 > 0 { first_pair.0 } else { vertices.len() + first_pair.0 };
+                let first_point = vertices[first_point_idx].clone();
                 for i in 1..indices_pairs.len()-1 {
                     let second_pair = indices_pairs[i];
+                    let second_point_idx = if second_pair.0 > 0 { second_pair.0 } else { vertices.len() + second_pair.0 };
+                    let second_point = vertices[second_point_idx].clone();
+
                     let third_pair = indices_pairs[i + 1];
+                    let third_point_idx = if third_pair.0 > 0 { third_pair.0 } else { vertices.len() + third_pair.0 };
+                    let third_point = vertices[third_point_idx].clone();
 
                     if no_normals {
+                        let mut face_normal = (&second_point - &first_point).cross(&third_point - &first_point);
+                        face_normal.normalize();
 
+                        assigned_normals[first_point_idx] += &face_normal;
+                        assigned_normals[second_point_idx] += &face_normal;
+                        assigned_normals[third_point_idx] += &face_normal;
                     } else {
-
+                        assigned_normals[first_point_idx] += &read_normals[if first_pair.1 > 0 { first_pair.1 } else { read_normals.len() + first_pair.1 }];
+                        assigned_normals[second_point_idx] += &read_normals[if second_pair.1 > 0 { second_pair.1 } else { read_normals.len() + second_pair.1 }];
+                        assigned_normals[third_point_idx] += &read_normals[if third_pair.1 > 0 { third_pair.1 } else { read_normals.len() + third_pair.1 }];
                     }
+
+                    pseudo_objects.push(PseudoObject{
+                        material: Rc::downgrade(current_material.as_ref().unwrap()),
+                        first_point_idx,
+                        second_point_idx,
+                        third_point_idx,
+                    })
                 }
             },
 
@@ -74,5 +102,13 @@ pub fn read_scene(finelame: &str) -> Scene{
         }
     }
 
-    Scene{vertices, normals, materials, objects, cube_map}
+    for normal in assigned_normals.iter_mut() {
+        normal.normalize();
+    }
+
+    Scene{
+        materials,
+        objects: pseudo_objects.iter().map(|x| x.build_object(&vertices, &assigned_normals)).collect(),
+        cube_map
+    }
 }

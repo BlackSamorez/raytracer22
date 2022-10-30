@@ -13,6 +13,16 @@ impl Vector3D {
     }
 }
 
+impl Clone for Vector3D {
+    fn clone(&self) -> Self {
+        Self{
+            x: self.x,
+            y: self.y,
+            z: self.z,
+        }
+    }
+}
+
 impl<R> std::ops::Add<R> for Vector3D
 where
     R: Borrow<Vector3D>,
