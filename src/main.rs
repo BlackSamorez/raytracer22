@@ -1,5 +1,6 @@
-pub mod geometry;
+mod geometry;
+mod scene;
 
 fn main() {
-    println!("Hello, world!");
+    let x = geometry::vector::Vector3D::new();
 }
