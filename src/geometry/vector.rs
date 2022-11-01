@@ -15,7 +15,7 @@ impl Vector3D {
 
 impl Clone for Vector3D {
     fn clone(&self) -> Self {
-        Self{
+        Self {
             x: self.x,
             y: self.y,
             z: self.z,
@@ -24,8 +24,8 @@ impl Clone for Vector3D {
 }
 
 impl<R> std::ops::Add<R> for Vector3D
-where
-    R: Borrow<Vector3D>,
+    where
+        R: Borrow<Vector3D>,
 {
     type Output = Self;
 
@@ -39,8 +39,8 @@ where
 }
 
 impl<R> std::ops::Add<R> for &Vector3D
-where
-    R: Borrow<Vector3D>,
+    where
+        R: Borrow<Vector3D>,
 {
     type Output = Vector3D;
 
@@ -54,8 +54,8 @@ where
 }
 
 impl<R> std::ops::AddAssign<R> for Vector3D
-where
-    R: Borrow<Vector3D>,
+    where
+        R: Borrow<Vector3D>,
 {
     fn add_assign(&mut self, rhs: R) {
         self.x += rhs.borrow().x;
@@ -89,8 +89,8 @@ impl std::ops::Neg for &Vector3D {
 }
 
 impl<R> std::ops::Sub<R> for Vector3D
-where
-    R: Borrow<Vector3D>,
+    where
+        R: Borrow<Vector3D>,
 {
     type Output = Vector3D;
 
@@ -104,8 +104,8 @@ where
 }
 
 impl<R> std::ops::Sub<R> for &Vector3D
-where
-    R: Borrow<Vector3D>,
+    where
+        R: Borrow<Vector3D>,
 {
     type Output = Vector3D;
 
@@ -119,8 +119,8 @@ where
 }
 
 impl<R> std::ops::SubAssign<R> for Vector3D
-where
-    R: Borrow<Vector3D>,
+    where
+        R: Borrow<Vector3D>,
 {
     fn sub_assign(&mut self, rhs: R) {
         self.x -= rhs.borrow().x;
@@ -203,8 +203,8 @@ impl Vector3D {
     }
 
     pub fn cross<R>(&self, rhs: R) -> Self
-    where
-        R: Borrow<Vector3D>,
+        where
+            R: Borrow<Vector3D>,
     {
         Self {
             x: self.y * rhs.borrow().z - self.z * rhs.borrow().y,

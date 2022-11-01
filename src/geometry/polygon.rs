@@ -12,7 +12,6 @@ pub struct Polygon {
 
 impl Polygon {
     pub fn area(&self) -> f64 {
-        let a = &self.second_point;
         (&self.second_point - &self.first_point)
             .cross(&(&self.third_point - &self.first_point))
             .len()

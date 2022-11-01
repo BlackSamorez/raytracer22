@@ -1,12 +1,12 @@
-pub mod intersection;
-pub mod polygon;
-pub mod ray;
-pub mod vector;
-
 use intersection::Intersection;
 use polygon::Polygon;
 use ray::Ray;
 use vector::Vector3D;
+
+pub mod intersection;
+pub mod polygon;
+pub mod ray;
+pub mod vector;
 
 static EPSILON: f64 = 1e-5;
 
