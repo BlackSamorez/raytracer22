@@ -8,7 +8,7 @@ pub mod polygon;
 pub mod ray;
 pub mod vector;
 
-static EPSILON: f64 = 1e-5;
+pub static EPSILON: f64 = 1e-5;
 
 pub fn get_intersection(ray: &Ray, polygon: &Polygon) -> Option<Intersection> {
     let first_edge = &polygon.second_point - &polygon.first_point;

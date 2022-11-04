@@ -1,6 +1,7 @@
+use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 
-#[derive(Default, PartialEq)]
+#[derive(Default, PartialEq, Deserialize, Serialize)]
 pub struct Vector3D {
     pub x: f64,
     pub y: f64,
@@ -23,9 +24,19 @@ impl Clone for Vector3D {
     }
 }
 
+impl From<[f64; 3]> for Vector3D {
+    fn from(array: [f64; 3]) -> Self {
+        Self {
+            x: array[0],
+            y: array[1],
+            z: array[2],
+        }
+    }
+}
+
 impl<R> std::ops::Add<R> for Vector3D
-    where
-        R: Borrow<Vector3D>,
+where
+    R: Borrow<Vector3D>,
 {
     type Output = Self;
 
@@ -39,8 +50,8 @@ impl<R> std::ops::Add<R> for Vector3D
 }
 
 impl<R> std::ops::Add<R> for &Vector3D
-    where
-        R: Borrow<Vector3D>,
+where
+    R: Borrow<Vector3D>,
 {
     type Output = Vector3D;
 
@@ -54,8 +65,8 @@ impl<R> std::ops::Add<R> for &Vector3D
 }
 
 impl<R> std::ops::AddAssign<R> for Vector3D
-    where
-        R: Borrow<Vector3D>,
+where
+    R: Borrow<Vector3D>,
 {
     fn add_assign(&mut self, rhs: R) {
         self.x += rhs.borrow().x;
@@ -89,8 +100,8 @@ impl std::ops::Neg for &Vector3D {
 }
 
 impl<R> std::ops::Sub<R> for Vector3D
-    where
-        R: Borrow<Vector3D>,
+where
+    R: Borrow<Vector3D>,
 {
     type Output = Vector3D;
 
@@ -104,8 +115,8 @@ impl<R> std::ops::Sub<R> for Vector3D
 }
 
 impl<R> std::ops::Sub<R> for &Vector3D
-    where
-        R: Borrow<Vector3D>,
+where
+    R: Borrow<Vector3D>,
 {
     type Output = Vector3D;
 
@@ -119,8 +130,8 @@ impl<R> std::ops::Sub<R> for &Vector3D
 }
 
 impl<R> std::ops::SubAssign<R> for Vector3D
-    where
-        R: Borrow<Vector3D>,
+where
+    R: Borrow<Vector3D>,
 {
     fn sub_assign(&mut self, rhs: R) {
         self.x -= rhs.borrow().x;
@@ -203,8 +214,8 @@ impl Vector3D {
     }
 
     pub fn cross<R>(&self, rhs: R) -> Self
-        where
-            R: Borrow<Vector3D>,
+    where
+        R: Borrow<Vector3D>,
     {
         Self {
             x: self.y * rhs.borrow().z - self.z * rhs.borrow().y,

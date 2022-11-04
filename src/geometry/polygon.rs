@@ -28,6 +28,8 @@ impl Polygon {
             .cross(&(&self.first_point - x))
             .len();
 
-        &self.first_normal * area_bcx + &self.second_normal * area_cax + &self.third_normal * area_abx
+        &self.first_normal * area_bcx
+            + &self.second_normal * area_cax
+            + &self.third_normal * area_abx
     }
 }

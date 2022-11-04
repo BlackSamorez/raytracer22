@@ -7,9 +7,9 @@ use material::Material;
 use object::Object;
 
 pub mod cube_map;
-pub mod object;
-pub mod material;
 pub mod light;
+pub mod material;
+pub mod object;
 mod reader;
 
 pub struct Scene {

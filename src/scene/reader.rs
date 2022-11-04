@@ -1,19 +1,24 @@
+use log::{debug, info};
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{BufReader, prelude::*};
+use std::io::{prelude::*, BufReader};
 use std::path::Path;
 use std::rc::Rc;
 
 use crate::geometry::vector::Vector3D;
-use crate::scene::CubeMap;
 use crate::scene::light::Light;
 use crate::scene::material::Material;
 use crate::scene::object::PseudoObject;
+use crate::scene::CubeMap;
 use crate::scene::Scene;
 
 fn read_point(triplet: &[&str]) -> Vector3D {
     assert!(triplet.len() >= 3);
-    Vector3D { x: triplet[0].parse().unwrap(), y: triplet[1].parse().unwrap(), z: triplet[2].parse().unwrap() }
+    Vector3D {
+        x: triplet[0].parse().unwrap(),
+        y: triplet[1].parse().unwrap(),
+        z: triplet[2].parse().unwrap(),
+    }
 }
 
 fn read_indices_pairs(face_elements: &[&str]) -> Vec<(usize, usize)> {
@@ -31,7 +36,9 @@ fn read_indices_pairs(face_elements: &[&str]) -> Vec<(usize, usize)> {
 }
 
 fn read_materials(materials_path: &Path) -> HashMap<String, Rc<Material>> {
-    let file = File::open(materials_path).unwrap_or_else(|_| panic!("Couldn't open materials file: {}", materials_path.to_str().unwrap()));
+    debug!("Reading materials from {}", materials_path.display());
+    let file = File::open(materials_path)
+        .unwrap_or_else(|_| panic!("Couldn't open materials file: {}", materials_path.display()));
     let reader = BufReader::new(file);
 
     let mut materials: HashMap<String, Rc<Material>> = HashMap::new();
@@ -47,7 +54,8 @@ fn read_materials(materials_path: &Path) -> HashMap<String, Rc<Material>> {
 
         match tokens.as_slice() {
             ["newmtl", name] => {
-                if current_material_started { // Save previous material
+                if current_material_started {
+                    // Save previous material
                     materials.insert(current_material.name.clone(), Rc::new(current_material));
                 }
                 current_material = Material::default();
@@ -61,15 +69,24 @@ fn read_materials(materials_path: &Path) -> HashMap<String, Rc<Material>> {
             ["Ns", exponent] => current_material.specular_exponent = exponent.parse().unwrap(),
             ["Ni", index] => current_material.refraction_index = index.parse().unwrap(),
             ["al", body @ ..] => current_material.albedo = read_point(body),
-            _ => panic!("Unknown key"),
+            ["illum", ..] => continue,
+            [smt, ..] if smt.starts_with('#') => continue,
+            _ => panic!("Unknown key in line {}", n + 1),
         }
     }
+    if current_material_started {
+        // Save previous material
+        materials.insert(current_material.name.clone(), Rc::new(current_material));
+    }
 
+    debug!("Done reading materials from {}", materials_path.display());
     materials
 }
 
 pub fn read_scene(file_path: &Path) -> Scene {
-    let file = File::open(file_path).unwrap_or_else(|_| panic!("Couldn't open scene file: {}", file_path.to_str().unwrap()));
+    info!("Reading scene from {}", file_path.display());
+    let file = File::open(file_path)
+        .unwrap_or_else(|_| panic!("Couldn't open scene file: {}", file_path.display()));
     let reader = BufReader::new(file);
 
     let mut vertices = vec![];
@@ -101,31 +118,59 @@ pub fn read_scene(file_path: &Path) -> Scene {
 
                 let no_normals = indices_pairs.iter().all(|(_, normal)| *normal == 0);
                 let all_normals = indices_pairs.iter().all(|(_, normal)| *normal != 0);
-                assert!(no_normals || all_normals, "Either all point should have normals or none should");
+                assert!(
+                    no_normals || all_normals,
+                    "Either all point should have normals or none should"
+                );
 
                 let first_pair = indices_pairs[0];
-                let first_point_idx = if first_pair.0 > 0 { first_pair.0 } else { vertices.len() + first_pair.0 };
+                let first_point_idx = if first_pair.0 > 0 {
+                    first_pair.0 - 1
+                } else {
+                    vertices.len() + first_pair.0
+                };
                 let first_point = vertices[first_point_idx].clone();
                 for i in 1..indices_pairs.len() - 1 {
                     let second_pair = indices_pairs[i];
-                    let second_point_idx = if second_pair.0 > 0 { second_pair.0 } else { vertices.len() + second_pair.0 };
+                    let second_point_idx = if second_pair.0 > 0 {
+                        second_pair.0 - 1
+                    } else {
+                        vertices.len() + second_pair.0
+                    };
                     let second_point = vertices[second_point_idx].clone();
 
                     let third_pair = indices_pairs[i + 1];
-                    let third_point_idx = if third_pair.0 > 0 { third_pair.0 } else { vertices.len() + third_pair.0 };
+                    let third_point_idx = if third_pair.0 > 0 {
+                        third_pair.0 - 1
+                    } else {
+                        vertices.len() + third_pair.0
+                    };
                     let third_point = vertices[third_point_idx].clone();
 
                     if no_normals {
-                        let mut face_normal = (&second_point - &first_point).cross(&third_point - &first_point);
+                        let mut face_normal =
+                            (&second_point - &first_point).cross(&third_point - &first_point);
                         face_normal.normalize();
 
                         assigned_normals[first_point_idx] += &face_normal;
                         assigned_normals[second_point_idx] += &face_normal;
                         assigned_normals[third_point_idx] += &face_normal;
                     } else {
-                        assigned_normals[first_point_idx] += &read_normals[if first_pair.1 > 0 { first_pair.1 } else { read_normals.len() + first_pair.1 }];
-                        assigned_normals[second_point_idx] += &read_normals[if second_pair.1 > 0 { second_pair.1 } else { read_normals.len() + second_pair.1 }];
-                        assigned_normals[third_point_idx] += &read_normals[if third_pair.1 > 0 { third_pair.1 } else { read_normals.len() + third_pair.1 }];
+                        assigned_normals[first_point_idx] += &read_normals[if first_pair.1 > 0 {
+                            first_pair.1 - 1
+                        } else {
+                            read_normals.len() + first_pair.1
+                        }];
+                        assigned_normals[second_point_idx] += &read_normals[if second_pair.1 > 0 {
+                            second_pair.1 - 1
+                        } else {
+                            read_normals.len() + second_pair.1
+                        }];
+                        assigned_normals[third_point_idx] += &read_normals[if third_pair.1 > 0 {
+                            third_pair.1 - 1
+                        } else {
+                            read_normals.len() + third_pair.1
+                        }];
                     }
 
                     pseudo_objects.push(PseudoObject {
@@ -136,7 +181,10 @@ pub fn read_scene(file_path: &Path) -> Scene {
                     })
                 }
             }
-            ["mtllib", mtl_filename] => materials = read_materials(&file_path.parent().unwrap().join(Path::new(mtl_filename))),
+            ["mtllib", mtl_filename] => {
+                materials =
+                    read_materials(&file_path.parent().unwrap().join(Path::new(mtl_filename)))
+            }
             ["usemtl", mtl_name] => current_material = Some(Rc::clone(&materials[*mtl_name])),
             ["P", body @ ..] => {
                 lights.push(Light {
@@ -144,8 +192,15 @@ pub fn read_scene(file_path: &Path) -> Scene {
                     intensity: read_point(&body[3..]),
                 });
             }
-            ["Sky", _, _, sky_filename] => cube_map = Some(CubeMap::new(&file_path.parent().unwrap().join(Path::new(sky_filename)))),
-            _ => panic!("Unknown key")
+            ["Sky", _, _, sky_filename] => {
+                cube_map = Some(CubeMap::new(
+                    &file_path.parent().unwrap().join(Path::new(sky_filename)),
+                ))
+            }
+            [smt, ..] if smt.starts_with('#') => continue,
+            ["g", ..] => continue,
+            ["s", ..] => continue,
+            _ => panic!("Unknown key in line {}", n + 1),
         }
     }
 
@@ -153,9 +208,14 @@ pub fn read_scene(file_path: &Path) -> Scene {
         normal.normalize();
     }
 
+    info!("Done reading scene from {}", file_path.display());
+
     Scene {
         materials: materials.into_iter().map(|(_, v)| v).collect(),
-        objects: pseudo_objects.iter().map(|x| x.build_object(&vertices, &assigned_normals)).collect(),
+        objects: pseudo_objects
+            .iter()
+            .map(|x| x.build_object(&vertices, &assigned_normals))
+            .collect(),
         lights,
         cube_map,
     }
