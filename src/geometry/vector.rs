@@ -220,7 +220,7 @@ impl Vector3D {
         Self {
             x: self.y * rhs.borrow().z - self.z * rhs.borrow().y,
             y: self.z * rhs.borrow().x - self.x * rhs.borrow().z,
-            z: self.x * rhs.borrow().y - self.y * rhs.borrow().z,
+            z: self.x * rhs.borrow().y - self.y * rhs.borrow().x,
         }
     }
 }

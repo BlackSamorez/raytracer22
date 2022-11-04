@@ -21,7 +21,7 @@ fn read_point(triplet: &[&str]) -> Vector3D {
     }
 }
 
-fn read_indices_pairs(face_elements: &[&str]) -> Vec<(usize, usize)> {
+fn read_indices_pairs(face_elements: &[&str]) -> Vec<(isize, isize)> {
     let mut result = vec![];
 
     for &face_element in face_elements {
@@ -125,25 +125,25 @@ pub fn read_scene(file_path: &Path) -> Scene {
 
                 let first_pair = indices_pairs[0];
                 let first_point_idx = if first_pair.0 > 0 {
-                    first_pair.0 - 1
+                    (first_pair.0 - 1) as usize
                 } else {
-                    vertices.len() + first_pair.0
+                    (vertices.len() as isize + first_pair.0) as usize
                 };
                 let first_point = vertices[first_point_idx].clone();
                 for i in 1..indices_pairs.len() - 1 {
                     let second_pair = indices_pairs[i];
                     let second_point_idx = if second_pair.0 > 0 {
-                        second_pair.0 - 1
+                        (second_pair.0 - 1) as usize
                     } else {
-                        vertices.len() + second_pair.0
+                        (vertices.len() as isize + second_pair.0) as usize
                     };
                     let second_point = vertices[second_point_idx].clone();
 
                     let third_pair = indices_pairs[i + 1];
                     let third_point_idx = if third_pair.0 > 0 {
-                        third_pair.0 - 1
+                        (third_pair.0 - 1) as usize
                     } else {
-                        vertices.len() + third_pair.0
+                        (vertices.len() as isize + third_pair.0) as usize
                     };
                     let third_point = vertices[third_point_idx].clone();
 
@@ -157,19 +157,19 @@ pub fn read_scene(file_path: &Path) -> Scene {
                         assigned_normals[third_point_idx] += &face_normal;
                     } else {
                         assigned_normals[first_point_idx] += &read_normals[if first_pair.1 > 0 {
-                            first_pair.1 - 1
+                            (first_pair.1 - 1) as usize
                         } else {
-                            read_normals.len() + first_pair.1
+                            (read_normals.len() as isize + first_pair.1) as usize
                         }];
                         assigned_normals[second_point_idx] += &read_normals[if second_pair.1 > 0 {
-                            second_pair.1 - 1
+                            (second_pair.1 - 1) as usize
                         } else {
-                            read_normals.len() + second_pair.1
+                            (read_normals.len() as isize + second_pair.1) as usize
                         }];
                         assigned_normals[third_point_idx] += &read_normals[if third_pair.1 > 0 {
-                            third_pair.1 - 1
+                            (third_pair.1 - 1) as usize
                         } else {
-                            read_normals.len() + third_pair.1
+                            (read_normals.len() as isize + third_pair.1) as usize
                         }];
                     }
 

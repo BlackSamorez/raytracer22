@@ -6,13 +6,33 @@ use image::RgbImage;
 use crate::geometry::ray::Ray;
 use crate::geometry::vector::Vector3D;
 
-enum StrongestDirection {
+pub enum StrongestDirection {
     Front,
     Back,
     Top,
     Bottom,
     Right,
     Left,
+}
+
+fn get_strongest_direction(vector: &Vector3D) -> StrongestDirection {
+    let abs = vec![vector.x.abs(), vector.y.abs(), vector.z.abs()];
+
+    match abs
+        .iter()
+        .enumerate()
+        .max_by(|(_, a), (_, b)| a.total_cmp(b))
+        .map(|(pos, _)| pos)
+        .unwrap()
+    {
+        0 if vector.x > 0.0 => StrongestDirection::Front,
+        0 => StrongestDirection::Back,
+        1 if vector.y > 0.0 => StrongestDirection::Right,
+        1 => StrongestDirection::Left,
+        2 if vector.z > 0.0 => StrongestDirection::Top,
+        2 => StrongestDirection::Bottom,
+        _ => panic!("Error getting strongest direction"),
+    }
 }
 
 pub struct CubeMap {
@@ -28,26 +48,6 @@ impl CubeMap {
         }
     }
 
-    fn get_strongest_direction(ray: &Ray) -> StrongestDirection {
-        let direction = &ray.direction;
-        let abs = vec![direction.x.abs(), direction.y.abs(), direction.z.abs()];
-
-        match abs
-            .iter()
-            .enumerate()
-            .max_by(|(_, a), (_, b)| a.total_cmp(b))
-            .map(|(pos, value)| (pos, *value > 0.0))
-        {
-            Some((0, true)) => StrongestDirection::Front,
-            Some((0, false)) => StrongestDirection::Back,
-            Some((1, true)) => StrongestDirection::Top,
-            Some((1, false)) => StrongestDirection::Bottom,
-            Some((2, true)) => StrongestDirection::Right,
-            Some((2, false)) => StrongestDirection::Left,
-            _ => panic!("Error getting strongest direction"),
-        }
-    }
-
     pub fn trace(&self, ray: &Ray) -> Vector3D {
         let side_size = (self.img.width() / 4) as usize;
         let direction = &ray.direction;
@@ -55,54 +55,49 @@ impl CubeMap {
 
         let x: u32;
         let y: u32;
-        match abs
-            .iter()
-            .enumerate()
-            .max_by(|(_, a), (_, b)| a.total_cmp(b))
-        {
-            Some((0, &v)) if v >= 0.0 => {
-                let scaled_direction = direction / v;
-                x = (((3 * side_size) / 2) as f64 + side_size as f64 * scaled_direction.z / 2.0)
+        match get_strongest_direction(direction) {
+            StrongestDirection::Front => {
+                let scaled_direction = direction / direction.x;
+                x = (3. / 2. * side_size as f64 + side_size as f64 * scaled_direction.y / 2.0)
                     as u32;
-                y = (((3 * side_size) / 2) as f64 + side_size as f64 * -scaled_direction.y / 2.0)
+                y = (3. / 2. * side_size as f64 - side_size as f64 * scaled_direction.z / 2.0)
                     as u32;
             }
-            Some((0, &v)) if v < 0.0 => {
-                let scaled_direction = direction / v;
-                x = (((7 * side_size) / 2) as f64 + side_size as f64 * -scaled_direction.z / 2.0)
+            StrongestDirection::Back => {
+                let scaled_direction = direction / -direction.x;
+                x = (7. / 2. * side_size as f64 - side_size as f64 * scaled_direction.y / 2.0)
                     as u32;
-                y = (((3 * side_size) / 2) as f64 + side_size as f64 * -scaled_direction.y / 2.0)
-                    as u32;
-            }
-            Some((1, &v)) if v >= 0.0 => {
-                let scaled_direction = direction / v;
-                x = (((3 * side_size) / 2) as f64 + side_size as f64 * scaled_direction.z / 2.0)
-                    as u32;
-                y = (((1 * side_size) / 2) as f64 + side_size as f64 * scaled_direction.x / 2.0)
+                y = (3. / 2. * side_size as f64 - side_size as f64 * scaled_direction.z / 2.0)
                     as u32;
             }
-            Some((1, &v)) if v < 0.0 => {
-                let scaled_direction = direction / v;
-                x = (((3 * side_size) / 2) as f64 + side_size as f64 * scaled_direction.z / 2.0)
+            StrongestDirection::Top => {
+                let scaled_direction = direction / direction.z;
+                x = (3. / 2. * side_size as f64 + side_size as f64 * scaled_direction.y / 2.0)
                     as u32;
-                y = (((5 * side_size) / 2) as f64 + side_size as f64 * -scaled_direction.x / 2.0)
-                    as u32;
-            }
-            Some((2, &v)) if v >= 0.0 => {
-                let scaled_direction = direction / v;
-                x = (((5 * side_size) / 2) as f64 + side_size as f64 * -scaled_direction.x / 2.0)
-                    as u32;
-                y = (((3 * side_size) / 2) as f64 + side_size as f64 * -scaled_direction.y / 2.0)
+                y = (1. / 2. * side_size as f64 + side_size as f64 * scaled_direction.x / 2.0)
                     as u32;
             }
-            Some((3, &v)) if v < 0.0 => {
-                let scaled_direction = direction / v;
-                x = (((1 * side_size) / 2) as f64 + side_size as f64 * scaled_direction.x / 2.0)
+            StrongestDirection::Bottom => {
+                let scaled_direction = direction / -direction.z;
+                x = (3. / 2. * side_size as f64 + side_size as f64 * scaled_direction.y / 2.0)
                     as u32;
-                y = (((3 * side_size) / 2) as f64 + side_size as f64 * -scaled_direction.y / 2.0)
+                y = (5. / 2. * side_size as f64 + side_size as f64 * -scaled_direction.x / 2.0)
                     as u32;
             }
-            _ => panic!("Error getting strongest direction"),
+            StrongestDirection::Right => {
+                let scaled_direction = direction / direction.y;
+                x = (5. / 2. * side_size as f64 + side_size as f64 * -scaled_direction.x / 2.0)
+                    as u32;
+                y = (3. / 2. * side_size as f64 + side_size as f64 * -scaled_direction.z / 2.0)
+                    as u32;
+            }
+            StrongestDirection::Left => {
+                let scaled_direction = direction / -direction.y;
+                x = (1. / 2. * side_size as f64 + side_size as f64 * scaled_direction.x / 2.0)
+                    as u32;
+                y = (3. / 2. * side_size as f64 + side_size as f64 * -scaled_direction.z / 2.0)
+                    as u32;
+            }
         }
 
         let color = self.img.get_pixel(x, y).0;

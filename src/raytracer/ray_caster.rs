@@ -21,9 +21,9 @@ pub struct RayCaster {
     pub width: usize,
 
     origin: Vector3D,
-    backward_unit: Vector3D,
-    right_unit: Vector3D,
-    up_unit: Vector3D,
+    forward: Vector3D,
+    pixel_right: Vector3D,
+    pixel_up: Vector3D,
 }
 
 impl RayCaster {
@@ -34,39 +34,34 @@ impl RayCaster {
             }))
             .unwrap();
 
-        let mut backward_unit = &config.look_from - &config.look_to;
-        backward_unit.normalize();
+        let mut forward = &config.look_to - &config.look_from;
+        forward.normalize();
 
-        let mut right_unit = Vector3D::from([0., 1., 0.]).cross(&backward_unit);
-        let mut up_unit;
-        if right_unit.len() < EPSILON {
-            right_unit = Vector3D::from([1., 0., 0.]);
-            up_unit = Vector3D::from([0., 0., 1.]);
-        } else {
-            right_unit.normalize();
-            up_unit = right_unit.cross(&backward_unit);
-            up_unit.normalize();
-        }
+        let mut pixel_right = forward.cross(&Vector3D::from([0., 0., 1.]));
+        pixel_right.normalize();
+
+        let mut pixel_up = pixel_right.cross(&forward);
+        pixel_up.normalize();
 
         let pixel_size = 2. * (config.fov / 2.).tan() / (config.height as f64);
 
-        up_unit *= pixel_size;
-        right_unit *= pixel_size;
+        pixel_up *= pixel_size;
+        pixel_right *= pixel_size;
 
         RayCaster {
             height: config.height,
             width: config.width,
             origin: config.look_from,
-            backward_unit,
-            right_unit,
-            up_unit,
+            forward,
+            pixel_right,
+            pixel_up,
         }
     }
 
     pub fn cast_ray(&self, x: usize, y: usize) -> Ray {
-        let mut direction = &self.right_unit * ((2. * x as f64 - self.width as f64 + 1.) / 2.)
-            + &self.up_unit * ((2. * y as f64 - self.height as f64 + 1.) / 2.) as f64
-            - &self.backward_unit;
+        let mut direction = &self.forward
+            + &self.pixel_right * (x as f64 - self.width as f64 / 2.0)
+            + &self.pixel_up * (y as f64 - self.height as f64 / 2.0);
         direction.normalize();
         Ray {
             from: self.origin.clone(),
