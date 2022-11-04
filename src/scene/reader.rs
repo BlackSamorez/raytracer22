@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{prelude::*, BufReader};
 use std::path::Path;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::geometry::vector::Vector3D;
 use crate::scene::light::Light;
@@ -35,13 +35,13 @@ fn read_indices_pairs(face_elements: &[&str]) -> Vec<(usize, usize)> {
     result
 }
 
-fn read_materials(materials_path: &Path) -> HashMap<String, Rc<Material>> {
+fn read_materials(materials_path: &Path) -> HashMap<String, Arc<Material>> {
     debug!("Reading materials from {}", materials_path.display());
     let file = File::open(materials_path)
         .unwrap_or_else(|_| panic!("Couldn't open materials file: {}", materials_path.display()));
     let reader = BufReader::new(file);
 
-    let mut materials: HashMap<String, Rc<Material>> = HashMap::new();
+    let mut materials: HashMap<String, Arc<Material>> = HashMap::new();
     let mut current_material = Material::default();
     let mut current_material_started = false;
     for (n, line) in reader.lines().enumerate() {
@@ -56,7 +56,7 @@ fn read_materials(materials_path: &Path) -> HashMap<String, Rc<Material>> {
             ["newmtl", name] => {
                 if current_material_started {
                     // Save previous material
-                    materials.insert(current_material.name.clone(), Rc::new(current_material));
+                    materials.insert(current_material.name.clone(), Arc::new(current_material));
                 }
                 current_material = Material::default();
                 current_material_started = true;
@@ -76,7 +76,7 @@ fn read_materials(materials_path: &Path) -> HashMap<String, Rc<Material>> {
     }
     if current_material_started {
         // Save previous material
-        materials.insert(current_material.name.clone(), Rc::new(current_material));
+        materials.insert(current_material.name.clone(), Arc::new(current_material));
     }
 
     debug!("Done reading materials from {}", materials_path.display());
@@ -96,7 +96,7 @@ pub fn read_scene(file_path: &Path) -> Scene {
     let mut pseudo_objects = vec![];
     let mut lights = vec![];
     let mut cube_map = None;
-    let mut current_material: Option<Rc<Material>> = None;
+    let mut current_material: Arc<Material> = Arc::new(Material::default());
 
     for (n, line) in reader.lines().enumerate() {
         let line = line.unwrap();
@@ -174,7 +174,7 @@ pub fn read_scene(file_path: &Path) -> Scene {
                     }
 
                     pseudo_objects.push(PseudoObject {
-                        material: Rc::downgrade(current_material.as_ref().unwrap()),
+                        material: Arc::clone(&current_material),
                         first_point_idx,
                         second_point_idx,
                         third_point_idx,
@@ -185,7 +185,7 @@ pub fn read_scene(file_path: &Path) -> Scene {
                 materials =
                     read_materials(&file_path.parent().unwrap().join(Path::new(mtl_filename)))
             }
-            ["usemtl", mtl_name] => current_material = Some(Rc::clone(&materials[*mtl_name])),
+            ["usemtl", mtl_name] => current_material = Arc::clone(&materials[*mtl_name]),
             ["P", body @ ..] => {
                 lights.push(Light {
                     position: read_point(&body[..3]),
@@ -211,7 +211,6 @@ pub fn read_scene(file_path: &Path) -> Scene {
     info!("Done reading scene from {}", file_path.display());
 
     Scene {
-        materials: materials.into_iter().map(|(_, v)| v).collect(),
         objects: pseudo_objects
             .iter()
             .map(|x| x.build_object(&vertices, &assigned_normals))

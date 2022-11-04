@@ -4,6 +4,7 @@ use super::vector::Vector3D;
 pub struct Ray {
     pub from: Vector3D,
     pub direction: Vector3D,
+    pub inside: bool,
 }
 
 impl Ray {

@@ -1,10 +1,12 @@
+mod illumination;
 mod ray_caster;
 
 use image::RgbImage;
 use std::path::Path;
-use std::sync::{Arc, MutexGuard, RwLock};
+use std::sync::{Arc, RwLock};
 
 use crate::geometry::vector::Vector3D;
+use crate::raytracer::illumination::calculate_illumniation;
 use ray_caster::RayCaster;
 
 use crate::scene::Scene;
@@ -52,7 +54,7 @@ impl Raytracer {
     }
 
     fn trace_ray(&self, x: usize, y: usize) -> Vector3D {
-        unimplemented!()
+        calculate_illumniation(&self.ray_caster.cast_ray(x, y), &self.scene, 1)
     }
 
     fn trace_full_image(&mut self) {

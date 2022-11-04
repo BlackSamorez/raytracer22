@@ -64,13 +64,14 @@ impl RayCaster {
     }
 
     pub fn cast_ray(&self, x: usize, y: usize) -> Ray {
-        let mut direction = &self.right_unit * ((2 * x - self.width + 1) / 2) as f64
-            + &self.up_unit * ((2 * y - self.height + 1) / 2) as f64
+        let mut direction = &self.right_unit * ((2. * x as f64 - self.width as f64 + 1.) / 2.)
+            + &self.up_unit * ((2. * y as f64 - self.height as f64 + 1.) / 2.) as f64
             - &self.backward_unit;
         direction.normalize();
         Ray {
             from: self.origin.clone(),
             direction,
+            inside: false,
         }
     }
 }

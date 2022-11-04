@@ -1,5 +1,6 @@
 use crate::geometry::vector::Vector3D;
 
+#[derive(Clone)]
 pub struct Material {
     pub name: String,
     pub ambient_color: Vector3D,
@@ -11,7 +12,7 @@ pub struct Material {
     pub albedo: Vector3D,
 }
 
-impl std::default::Default for Material {
+impl Default for Material {
     fn default() -> Self {
         Self {
             name: "".to_owned(),
