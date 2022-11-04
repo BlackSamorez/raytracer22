@@ -2,11 +2,12 @@ mod illumination;
 mod ray_caster;
 
 use image::RgbImage;
+use std::borrow::Borrow;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
 
 use crate::geometry::vector::Vector3D;
-use crate::raytracer::illumination::calculate_illumniation;
+use crate::raytracer::illumination::calculate_illumination;
 use ray_caster::RayCaster;
 
 use crate::scene::Scene;
@@ -54,7 +55,7 @@ impl Raytracer {
     }
 
     fn trace_ray(&self, x: usize, y: usize) -> Vector3D {
-        calculate_illumniation(&self.ray_caster.cast_ray(x, y), &self.scene, 1)
+        calculate_illumination(&self.ray_caster.cast_ray(x, y), &self.scene, 1)
     }
 
     fn trace_full_image(&mut self) {
@@ -66,13 +67,28 @@ impl Raytracer {
     }
 
     fn get_rgb_image(&self) -> RgbImage {
+        let max = self
+            .data
+            .read()
+            .unwrap()
+            .borrow()
+            .iter()
+            .flat_map(|vec| [vec.x, vec.y, vec.z])
+            .max_by(|x, y| x.total_cmp(y))
+            .unwrap();
         let bytes: Vec<u8> = self
             .data
             .read()
             .unwrap()
             .clone()
             .into_iter()
-            .flat_map(|vec| [vec.x as u8, vec.y as u8, vec.z as u8])
+            .flat_map(|vec| {
+                [
+                    (vec.x / max * 255.) as u8,
+                    (vec.y / max * 255.) as u8,
+                    (vec.z / max * 255.) as u8,
+                ]
+            })
             .collect();
 
         RgbImage::from_raw(

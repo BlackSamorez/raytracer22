@@ -41,18 +41,22 @@ fn get_the_collision(ray: &Ray, scene: &Scene) -> Collision {
     }
 }
 
-pub fn calculate_illumniation(ray: &Ray, scene: &Scene, ttl: usize) -> Vector3D {
+pub fn calculate_illumination(ray: &Ray, scene: &Scene, ttl: usize) -> Vector3D {
     if ttl == 0 {
         return Vector3D::default();
     }
 
     let collision = get_the_collision(ray, scene);
-    if matches!(collision, Collision::Sky) {
-        return match scene.cube_map {
+
+    match collision {
+        Collision::Sky => match scene.cube_map {
             None => Vector3D::default(),
             Some(ref cube_map) => cube_map.trace(ray),
-        };
+        },
+        Collision::Polygon(intersection, material) => Vector3D::from([
+            intersection.distance,
+            intersection.distance,
+            intersection.distance,
+        ]),
     }
-
-    Vector3D::default()
 }

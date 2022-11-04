@@ -14,7 +14,7 @@ pub fn get_intersection(ray: &Ray, polygon: &Polygon) -> Option<Intersection> {
     let first_edge = &polygon.second_point - &polygon.first_point;
     let second_edge = &polygon.third_point - &polygon.first_point;
     let h = ray.direction.cross(&second_edge);
-    let a = &h * &second_edge;
+    let a = &h * &first_edge;
 
     if a > -EPSILON && a < EPSILON {
         return None;
@@ -46,9 +46,9 @@ pub fn get_intersection(ray: &Ray, polygon: &Polygon) -> Option<Intersection> {
     };
 
     Some(Intersection {
+        distance: (&intersection_point - &ray.from).len(),
         position: intersection_point,
-        normal: normal,
-        distance: 0.0,
+        normal,
     })
 }
 
