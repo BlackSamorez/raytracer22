@@ -52,7 +52,7 @@ impl Raytracer {
     }
 
     fn trace_ray(&self, x: usize, y: usize) -> Vector3D {
-        Vector3D::from([100., 0., 0.])
+        unimplemented!()
     }
 
     fn trace_full_image(&mut self) {
