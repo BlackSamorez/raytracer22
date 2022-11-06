@@ -22,15 +22,15 @@ fn read_point(triplet: &[&str]) -> Result<Vector3D> {
     let vec = Vector3D {
         x: match triplet[0].parse() {
             Ok(val) => val,
-            Err(err) => return Err(anyhow::Error::from(err)),
+            Err(err) => return Err(anyhow::Error::from(err).context("reading x")),
         },
         y: match triplet[1].parse() {
             Ok(val) => val,
-            Err(err) => return Err(anyhow::Error::from(err)),
+            Err(err) => return Err(anyhow::Error::from(err).context("reading y")),
         },
         z: match triplet[2].parse() {
             Ok(val) => val,
-            Err(err) => return Err(anyhow::Error::from(err)),
+            Err(err) => return Err(anyhow::Error::from(err).context("reading z")),
         },
     };
     Ok(vec)
@@ -83,49 +83,49 @@ fn read_materials(materials_path: &Path) -> Result<HashMap<String, Arc<Material>
                     current_material.ambient_color = vec;
                     Ok(())
                 }
-                Err(err) => Err(err.context(", reading ambient_color")),
+                Err(err) => Err(err.context("reading ambient_color")),
             },
             ["Kd", body @ ..] => match read_point(body) {
                 Ok(vec) => {
                     current_material.diffuse_color = vec;
                     Ok(())
                 }
-                Err(err) => Err(err.context(", reading diffuse_color")),
+                Err(err) => Err(err.context("reading diffuse_color")),
             },
             ["Ks", body @ ..] => match read_point(body) {
                 Ok(vec) => {
                     current_material.specular_color = vec;
                     Ok(())
                 }
-                Err(err) => Err(err.context(", reading specular_color")),
+                Err(err) => Err(err.context("reading specular_color")),
             },
             ["Ke", body @ ..] => match read_point(body) {
                 Ok(vec) => {
                     current_material.intensity = vec;
                     Ok(())
                 }
-                Err(err) => Err(err.context(", reading intensity")),
+                Err(err) => Err(err.context("reading intensity")),
             },
             ["Ns", exponent] => match exponent.parse() {
                 Ok(exp) => {
                     current_material.specular_exponent = exp;
                     Ok(())
                 }
-                Err(err) => Err(anyhow::Error::from(err).context(", reading specular_exponent")),
+                Err(err) => Err(anyhow::Error::from(err).context("reading specular_exponent")),
             },
             ["Ni", index] => match index.parse() {
                 Ok(exp) => {
                     current_material.refraction_index = exp;
                     Ok(())
                 }
-                Err(err) => Err(anyhow::Error::from(err).context(", reading refraction_index")),
+                Err(err) => Err(anyhow::Error::from(err).context("reading refraction_index")),
             },
             ["al", body @ ..] => match read_point(body) {
                 Ok(vec) => {
                     current_material.albedo = vec;
                     Ok(())
                 }
-                Err(err) => Err(err.context(", reading albedo")),
+                Err(err) => Err(err.context("reading albedo")),
             },
             ["illum", ..] => Ok(()),
             [smt, ..] if smt.starts_with('#') => Ok(()),
@@ -134,7 +134,13 @@ fn read_materials(materials_path: &Path) -> Result<HashMap<String, Arc<Material>
 
         match result {
             Ok(()) => {}
-            Err(err) => return Err(err.context(format!(", on line {}", n))),
+            Err(err) => {
+                return Err(err.context(format!(
+                    "on line {} of {}",
+                    n + 1,
+                    materials_path.display()
+                )))
+            }
         }
     }
     if current_material_started {
@@ -227,11 +233,11 @@ fn read_light(body: &[&str]) -> Result<Light> {
     let light = Light {
         position: match read_point(&body[..3]) {
             Ok(position) => position,
-            Err(err) => return Err(err.context(", reading position")),
+            Err(err) => return Err(err.context("reading position")),
         },
         intensity: match read_point(&body[..3]) {
             Ok(intensity) => intensity,
-            Err(err) => return Err(err.context(", reading intensity")),
+            Err(err) => return Err(err.context("reading intensity")),
         },
     };
 
@@ -267,7 +273,7 @@ pub fn read_scene(file_path: &Path) -> Result<Scene> {
                     assigned_normals.push(Vector3D::default());
                     anyhow::Ok(())
                 }
-                Err(err) => Err(err.context(", reading vertex")),
+                Err(err) => Err(err.context("reading vertex")),
             },
             ["vt", ..] => Ok(()),
             ["vn", body @ ..] => match read_point(body) {
@@ -275,7 +281,7 @@ pub fn read_scene(file_path: &Path) -> Result<Scene> {
                     read_normals.push(normal);
                     Ok(())
                 }
-                Err(err) => Err(err.context(", reading normal")),
+                Err(err) => Err(err.context("reading normal")),
             },
             ["f", body @ ..] => match read_object(
                 body,
@@ -288,7 +294,7 @@ pub fn read_scene(file_path: &Path) -> Result<Scene> {
                     pseudo_objects.append(read_pseudo_objects);
                     Ok(())
                 }
-                Err(err) => Err(err.context(", reading object")),
+                Err(err) => Err(err.context("reading object")),
             },
             ["mtllib", mtl_filename] => {
                 match read_materials(&file_path.parent().unwrap().join(Path::new(mtl_filename))) {
@@ -308,7 +314,7 @@ pub fn read_scene(file_path: &Path) -> Result<Scene> {
                     lights.push(light);
                     Ok(())
                 }
-                Err(err) => Err(err.context(", reading light")),
+                Err(err) => Err(err.context("reading light")),
             },
             ["Sky", _, _, sky_filename] => {
                 cube_map = Some(CubeMap::new(
@@ -324,7 +330,9 @@ pub fn read_scene(file_path: &Path) -> Result<Scene> {
 
         match result {
             Ok(()) => {}
-            Err(err) => return Err(err.context(format!(", on line {}", n))),
+            Err(err) => {
+                return Err(err.context(format!("on line {} of {}", n + 1, file_path.display())))
+            }
         }
     }
 
