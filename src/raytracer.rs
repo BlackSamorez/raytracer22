@@ -2,6 +2,7 @@ mod illumination;
 mod ray_caster;
 
 use image::RgbImage;
+use indicatif::ProgressIterator;
 use std::borrow::Borrow;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
@@ -55,11 +56,11 @@ impl Raytracer {
     }
 
     fn trace_ray(&self, x: usize, y: usize) -> Vector3D {
-        calculate_illumination(&self.ray_caster.cast_ray(x, y), &self.scene, 1)
+        calculate_illumination(&self.ray_caster.cast_ray(x, y), &self.scene, 4)
     }
 
     fn trace_full_image(&mut self) {
-        for x in 0..self.ray_caster.width {
+        for x in (0..self.ray_caster.width).progress() {
             for y in 0..self.ray_caster.height {
                 self.set_pixel(x, y, self.trace_ray(x, y));
             }

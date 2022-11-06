@@ -27,10 +27,10 @@ fn get_strongest_direction(vector: &Vector3D) -> StrongestDirection {
     {
         0 if vector.x > 0.0 => StrongestDirection::Front,
         0 => StrongestDirection::Back,
-        1 if vector.y > 0.0 => StrongestDirection::Right,
-        1 => StrongestDirection::Left,
-        2 if vector.z > 0.0 => StrongestDirection::Top,
-        2 => StrongestDirection::Bottom,
+        1 if vector.y > 0.0 => StrongestDirection::Top,
+        1 => StrongestDirection::Bottom,
+        2 if vector.z > 0.0 => StrongestDirection::Right,
+        2 => StrongestDirection::Left,
         _ => panic!("Error getting strongest direction"),
     }
 }
@@ -51,51 +51,50 @@ impl CubeMap {
     pub fn trace(&self, ray: &Ray) -> Vector3D {
         let side_size = (self.img.width() / 4) as usize;
         let direction = &ray.direction;
-        let abs = vec![direction.x.abs(), direction.y.abs(), direction.z.abs()];
 
         let x: u32;
         let y: u32;
         match get_strongest_direction(direction) {
             StrongestDirection::Front => {
                 let scaled_direction = direction / direction.x;
-                x = (3. / 2. * side_size as f64 + side_size as f64 * scaled_direction.y / 2.0)
+                x = (3. / 2. * side_size as f64 - side_size as f64 * -scaled_direction.z / 2.0)
                     as u32;
-                y = (3. / 2. * side_size as f64 - side_size as f64 * scaled_direction.z / 2.0)
+                y = (3. / 2. * side_size as f64 + side_size as f64 * -scaled_direction.y / 2.0)
                     as u32;
             }
             StrongestDirection::Back => {
                 let scaled_direction = direction / -direction.x;
-                x = (7. / 2. * side_size as f64 - side_size as f64 * scaled_direction.y / 2.0)
+                x = (7. / 2. * side_size as f64 + side_size as f64 * -scaled_direction.z / 2.0)
                     as u32;
-                y = (3. / 2. * side_size as f64 - side_size as f64 * scaled_direction.z / 2.0)
+                y = (3. / 2. * side_size as f64 + side_size as f64 * -scaled_direction.y / 2.0)
                     as u32;
             }
             StrongestDirection::Top => {
-                let scaled_direction = direction / direction.z;
-                x = (3. / 2. * side_size as f64 + side_size as f64 * scaled_direction.y / 2.0)
+                let scaled_direction = direction / direction.y;
+                x = (3. / 2. * side_size as f64 + side_size as f64 * scaled_direction.z / 2.0)
                     as u32;
                 y = (1. / 2. * side_size as f64 + side_size as f64 * scaled_direction.x / 2.0)
                     as u32;
             }
             StrongestDirection::Bottom => {
-                let scaled_direction = direction / -direction.z;
-                x = (3. / 2. * side_size as f64 + side_size as f64 * scaled_direction.y / 2.0)
+                let scaled_direction = direction / -direction.y;
+                x = (3. / 2. * side_size as f64 + side_size as f64 * scaled_direction.z / 2.0)
                     as u32;
                 y = (5. / 2. * side_size as f64 + side_size as f64 * -scaled_direction.x / 2.0)
-                    as u32;
+                    as u32 - 1;
             }
             StrongestDirection::Right => {
-                let scaled_direction = direction / direction.y;
+                let scaled_direction = direction / direction.z;
                 x = (5. / 2. * side_size as f64 + side_size as f64 * -scaled_direction.x / 2.0)
                     as u32;
-                y = (3. / 2. * side_size as f64 + side_size as f64 * -scaled_direction.z / 2.0)
+                y = (3. / 2. * side_size as f64 + side_size as f64 * -scaled_direction.y / 2.0)
                     as u32;
             }
             StrongestDirection::Left => {
-                let scaled_direction = direction / -direction.y;
+                let scaled_direction = direction / -direction.z;
                 x = (1. / 2. * side_size as f64 + side_size as f64 * scaled_direction.x / 2.0)
                     as u32;
-                y = (3. / 2. * side_size as f64 + side_size as f64 * -scaled_direction.z / 2.0)
+                y = (3. / 2. * side_size as f64 + side_size as f64 * -scaled_direction.y / 2.0)
                     as u32;
             }
         }

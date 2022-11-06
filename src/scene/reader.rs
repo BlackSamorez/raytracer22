@@ -152,9 +152,29 @@ pub fn read_scene(file_path: &Path) -> Scene {
                             (&second_point - &first_point).cross(&third_point - &first_point);
                         face_normal.normalize();
 
-                        assigned_normals[first_point_idx] += &face_normal;
-                        assigned_normals[second_point_idx] += &face_normal;
-                        assigned_normals[third_point_idx] += &face_normal;
+                        if &face_normal * &assigned_normals[first_point_idx] < 0.0 {
+                            face_normal = -face_normal;
+                        }
+                        assigned_normals[first_point_idx] += &face_normal / (indices_pairs.len() - 2) as f64;
+
+                        if &face_normal * &assigned_normals[second_point_idx] < 0.0 {
+                            face_normal = -face_normal;
+                        }
+                        if i == 1 {
+                            assigned_normals[second_point_idx] += &face_normal;
+                        } else {
+                            assigned_normals[second_point_idx] += &face_normal / 2.0;
+                        }
+
+                        if &face_normal * &assigned_normals[third_point_idx] < 0.0 {
+                            face_normal = -face_normal;
+                        }
+                        if i == indices_pairs.len() - 2 {
+                            assigned_normals[third_point_idx] += &face_normal;
+                        } else {
+                            assigned_normals[third_point_idx] += &face_normal / 2.0;
+                        }
+
                     } else {
                         assigned_normals[first_point_idx] += &read_normals[if first_pair.1 > 0 {
                             (first_pair.1 - 1) as usize

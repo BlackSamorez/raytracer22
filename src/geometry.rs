@@ -38,12 +38,13 @@ pub fn get_intersection(ray: &Ray, polygon: &Polygon) -> Option<Intersection> {
     }
 
     let intersection_point = &ray.from + &ray.direction * t;
-    let unoriented_normal = first_edge.cross(&second_edge);
-    let normal = if &unoriented_normal * &ray.direction > 0.0 {
+    let unoriented_normal = polygon.weighted_normal(&intersection_point);
+    let mut normal = if &unoriented_normal * &ray.direction > 0.0 {
         -unoriented_normal
     } else {
         unoriented_normal
     };
+    normal.normalize();
 
     Some(Intersection {
         distance: (&intersection_point - &ray.from).len(),

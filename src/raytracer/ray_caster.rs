@@ -37,7 +37,7 @@ impl RayCaster {
         let mut forward = &config.look_to - &config.look_from;
         forward.normalize();
 
-        let mut pixel_right = forward.cross(&Vector3D::from([0., 0., 1.]));
+        let mut pixel_right = forward.cross(&Vector3D::from([0., 1., 0.]));
         pixel_right.normalize();
 
         let mut pixel_up = pixel_right.cross(&forward);
@@ -61,7 +61,7 @@ impl RayCaster {
     pub fn cast_ray(&self, x: usize, y: usize) -> Ray {
         let mut direction = &self.forward
             + &self.pixel_right * (x as f64 - self.width as f64 / 2.0)
-            + &self.pixel_up * (y as f64 - self.height as f64 / 2.0);
+            - &self.pixel_up * (y as f64 - self.height as f64 / 2.0);
         direction.normalize();
         Ray {
             from: self.origin.clone(),
