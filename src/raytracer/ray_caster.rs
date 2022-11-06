@@ -34,17 +34,17 @@ impl RayCaster {
             }))
             .unwrap();
 
-        let mut forward = &config.look_to - &config.look_from;
-        forward.normalize();
+        let forward = (&config.look_to - &config.look_from).normalize();
 
         let mut pixel_right = forward.cross(&Vector3D::from([0., 1., 0.]));
-        pixel_right.normalize();
-
-        let mut pixel_up = pixel_right.cross(&forward);
-        pixel_up.normalize();
+        if pixel_right.len() < EPSILON {
+            pixel_right = Vector3D::from([0., 0., 1.]);
+        } else {
+            pixel_right = pixel_right.normalize();
+        }
+        let mut pixel_up = pixel_right.cross(&forward).normalize();
 
         let pixel_size = 2. * (config.fov / 2.).tan() / (config.height as f64);
-
         pixel_up *= pixel_size;
         pixel_right *= pixel_size;
 
@@ -59,10 +59,9 @@ impl RayCaster {
     }
 
     pub fn cast_ray(&self, x: usize, y: usize) -> Ray {
-        let mut direction = &self.forward
-            + &self.pixel_right * (x as f64 - self.width as f64 / 2.0)
-            - &self.pixel_up * (y as f64 - self.height as f64 / 2.0);
-        direction.normalize();
+        let direction = (&self.forward + &self.pixel_right * (x as f64 - self.width as f64 / 2.0)
+            - &self.pixel_up * (y as f64 - self.height as f64 / 2.0))
+            .normalize();
         Ray {
             from: self.origin.clone(),
             direction,

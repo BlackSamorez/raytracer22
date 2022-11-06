@@ -1,4 +1,3 @@
-use std::borrow::Borrow;
 use std::path::Path;
 
 use image::RgbImage;
@@ -81,7 +80,8 @@ impl CubeMap {
                 x = (3. / 2. * side_size as f64 + side_size as f64 * scaled_direction.z / 2.0)
                     as u32;
                 y = (5. / 2. * side_size as f64 + side_size as f64 * -scaled_direction.x / 2.0)
-                    as u32 - 1;
+                    as u32
+                    - 1;
             }
             StrongestDirection::Right => {
                 let scaled_direction = direction / direction.z;

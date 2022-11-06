@@ -23,7 +23,7 @@ pub fn get_intersection(ray: &Ray, polygon: &Polygon) -> Option<Intersection> {
     let f = 1.0 / a;
     let s = &ray.from - &polygon.first_point;
     let u = f * (&s * &h);
-    if u < 0.0 || u > 1.0 {
+    if !(0.0..=1.0).contains(&u) {
         return None;
     }
     let q = s.cross(&first_edge);
@@ -39,12 +39,11 @@ pub fn get_intersection(ray: &Ray, polygon: &Polygon) -> Option<Intersection> {
 
     let intersection_point = &ray.from + &ray.direction * t;
     let unoriented_normal = polygon.weighted_normal(&intersection_point);
-    let mut normal = if &unoriented_normal * &ray.direction > 0.0 {
-        -unoriented_normal
+    let normal = if &unoriented_normal * &ray.direction > 0.0 {
+        -unoriented_normal.normalize()
     } else {
-        unoriented_normal
+        unoriented_normal.normalize()
     };
-    normal.normalize();
 
     Some(Intersection {
         distance: (&intersection_point - &ray.from).len(),

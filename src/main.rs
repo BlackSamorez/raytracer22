@@ -1,6 +1,8 @@
-use crate::raytracer::Raytracer;
-use log::{Level, LevelFilter, Metadata, Record, SetLoggerError};
 use std::path::Path;
+
+use log::{Level, LevelFilter, Metadata, Record, SetLoggerError};
+
+use crate::raytracer::Raytracer;
 
 mod geometry;
 mod raytracer;

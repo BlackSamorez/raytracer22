@@ -1,5 +1,6 @@
-use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
+
+use serde::{Deserialize, Serialize};
 
 #[derive(Default, PartialEq, Deserialize, Serialize)]
 pub struct Vector3D {
@@ -209,8 +210,9 @@ impl Vector3D {
         self.f2_norm().sqrt()
     }
 
-    pub fn normalize(&mut self) {
-        *self /= self.len()
+    pub fn normalize(mut self) -> Self {
+        self /= self.len();
+        self
     }
 
     pub fn cross<R>(&self, rhs: R) -> Self

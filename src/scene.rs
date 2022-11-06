@@ -17,7 +17,10 @@ pub struct Scene {
 }
 
 impl Scene {
-    pub fn new(file_path: &Path) -> Self {
-        reader::read_scene(file_path)
+    pub fn try_read(file_path: &Path) -> anyhow::Result<Self> {
+        match reader::read_scene(file_path) {
+            Ok(scene) => Ok(scene),
+            Err(err) => Err(err.context(format!(", reading scene from {}", file_path.display()))),
+        }
     }
 }

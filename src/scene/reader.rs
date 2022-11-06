@@ -1,9 +1,11 @@
-use log::{debug, info};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{prelude::*, BufReader};
 use std::path::Path;
 use std::sync::Arc;
+
+use anyhow::{anyhow, Result};
+use log::{debug, info};
 
 use crate::geometry::vector::Vector3D;
 use crate::scene::light::Light;
@@ -12,13 +14,26 @@ use crate::scene::object::PseudoObject;
 use crate::scene::CubeMap;
 use crate::scene::Scene;
 
-fn read_point(triplet: &[&str]) -> Vector3D {
-    assert!(triplet.len() >= 3);
-    Vector3D {
-        x: triplet[0].parse().unwrap(),
-        y: triplet[1].parse().unwrap(),
-        z: triplet[2].parse().unwrap(),
+fn read_point(triplet: &[&str]) -> Result<Vector3D> {
+    if triplet.len() != 3 {
+        return Err(anyhow!("Point must have 3 numbers"));
     }
+
+    let vec = Vector3D {
+        x: match triplet[0].parse() {
+            Ok(val) => val,
+            Err(err) => return Err(anyhow::Error::from(err)),
+        },
+        y: match triplet[1].parse() {
+            Ok(val) => val,
+            Err(err) => return Err(anyhow::Error::from(err)),
+        },
+        z: match triplet[2].parse() {
+            Ok(val) => val,
+            Err(err) => return Err(anyhow::Error::from(err)),
+        },
+    };
+    Ok(vec)
 }
 
 fn read_indices_pairs(face_elements: &[&str]) -> Vec<(isize, isize)> {
@@ -35,7 +50,7 @@ fn read_indices_pairs(face_elements: &[&str]) -> Vec<(isize, isize)> {
     result
 }
 
-fn read_materials(materials_path: &Path) -> HashMap<String, Arc<Material>> {
+fn read_materials(materials_path: &Path) -> Result<HashMap<String, Arc<Material>>> {
     debug!("Reading materials from {}", materials_path.display());
     let file = File::open(materials_path)
         .unwrap_or_else(|_| panic!("Couldn't open materials file: {}", materials_path.display()));
@@ -52,7 +67,7 @@ fn read_materials(materials_path: &Path) -> HashMap<String, Arc<Material>> {
             continue;
         }
 
-        match tokens.as_slice() {
+        let result = match tokens.as_slice() {
             ["newmtl", name] => {
                 if current_material_started {
                     // Save previous material
@@ -61,17 +76,65 @@ fn read_materials(materials_path: &Path) -> HashMap<String, Arc<Material>> {
                 current_material = Material::default();
                 current_material_started = true;
                 current_material.name = (*name).to_owned();
+                anyhow::Ok(())
             }
-            ["Ka", body @ ..] => current_material.ambient_color = read_point(body),
-            ["Kd", body @ ..] => current_material.diffuse_color = read_point(body),
-            ["Ks", body @ ..] => current_material.specular_color = read_point(body),
-            ["Ke", body @ ..] => current_material.intensity = read_point(body),
-            ["Ns", exponent] => current_material.specular_exponent = exponent.parse().unwrap(),
-            ["Ni", index] => current_material.refraction_index = index.parse().unwrap(),
-            ["al", body @ ..] => current_material.albedo = read_point(body),
-            ["illum", ..] => continue,
-            [smt, ..] if smt.starts_with('#') => continue,
-            _ => panic!("Unknown key in line {}", n + 1),
+            ["Ka", body @ ..] => match read_point(body) {
+                Ok(vec) => {
+                    current_material.ambient_color = vec;
+                    Ok(())
+                }
+                Err(err) => Err(err.context(", reading ambient_color")),
+            },
+            ["Kd", body @ ..] => match read_point(body) {
+                Ok(vec) => {
+                    current_material.diffuse_color = vec;
+                    Ok(())
+                }
+                Err(err) => Err(err.context(", reading diffuse_color")),
+            },
+            ["Ks", body @ ..] => match read_point(body) {
+                Ok(vec) => {
+                    current_material.specular_color = vec;
+                    Ok(())
+                }
+                Err(err) => Err(err.context(", reading specular_color")),
+            },
+            ["Ke", body @ ..] => match read_point(body) {
+                Ok(vec) => {
+                    current_material.intensity = vec;
+                    Ok(())
+                }
+                Err(err) => Err(err.context(", reading intensity")),
+            },
+            ["Ns", exponent] => match exponent.parse() {
+                Ok(exp) => {
+                    current_material.specular_exponent = exp;
+                    Ok(())
+                }
+                Err(err) => Err(anyhow::Error::from(err).context(", reading specular_exponent")),
+            },
+            ["Ni", index] => match index.parse() {
+                Ok(exp) => {
+                    current_material.refraction_index = exp;
+                    Ok(())
+                }
+                Err(err) => Err(anyhow::Error::from(err).context(", reading refraction_index")),
+            },
+            ["al", body @ ..] => match read_point(body) {
+                Ok(vec) => {
+                    current_material.albedo = vec;
+                    Ok(())
+                }
+                Err(err) => Err(err.context(", reading albedo")),
+            },
+            ["illum", ..] => Ok(()),
+            [smt, ..] if smt.starts_with('#') => Ok(()),
+            _ => Err(anyhow!("Unknown .mtl key")),
+        };
+
+        match result {
+            Ok(()) => {}
+            Err(err) => return Err(err.context(format!(", on line {}", n))),
         }
     }
     if current_material_started {
@@ -80,10 +143,102 @@ fn read_materials(materials_path: &Path) -> HashMap<String, Arc<Material>> {
     }
 
     debug!("Done reading materials from {}", materials_path.display());
-    materials
+    Ok(materials)
 }
 
-pub fn read_scene(file_path: &Path) -> Scene {
+fn get_index(read_idx: isize, length: usize) -> usize {
+    if read_idx > 0 {
+        (read_idx - 1) as usize
+    } else {
+        (length as isize + read_idx) as usize
+    }
+}
+
+fn get_object_normal(
+    vertices: &[Vector3D],
+    normals: &[Vector3D],
+    idx: &[(isize, isize)],
+) -> Vector3D {
+    let first_vertex = &vertices[get_index(idx[0].0, vertices.len())];
+    let second_vertex = &vertices[get_index(idx[1].0, vertices.len())];
+    let third_vertex = &vertices[get_index(idx[2].0, vertices.len())];
+    let unoriented_normal = (second_vertex - first_vertex)
+        .cross(third_vertex - first_vertex)
+        .normalize();
+    if &unoriented_normal * &normals[get_index(idx[0].0, vertices.len())] < 0.0 {
+        -unoriented_normal
+    } else {
+        unoriented_normal
+    }
+}
+
+fn read_object(
+    body: &[&str],
+    vertices: &[Vector3D],
+    read_normals: &[Vector3D],
+    assigned_normals: &mut [Vector3D],
+    material: &Arc<Material>,
+) -> Result<Vec<PseudoObject>> {
+    let indices_pairs = read_indices_pairs(body);
+    if indices_pairs.len() < 3 {
+        return Err(anyhow!("Object can't have less than 3 vertices"));
+    }
+
+    let no_normals = indices_pairs.iter().all(|(_, normal)| *normal == 0);
+    let all_normals = indices_pairs.iter().all(|(_, normal)| *normal != 0);
+
+    if !no_normals && !all_normals {
+        return Err(anyhow!(
+            "Ether all vertices should have normals or none should"
+        ));
+    }
+
+    let mut pseudo_objects = vec![];
+
+    let first_vertex_idx = get_index(indices_pairs[0].0, vertices.len());
+    for i in 1..indices_pairs.len() - 1 {
+        let second_vertex_idx = get_index(indices_pairs[i].0, vertices.len());
+        let third_vertex_idx = get_index(indices_pairs[i + 1].0, vertices.len());
+        pseudo_objects.push(PseudoObject {
+            material: Arc::clone(material),
+            first_vertex_idx,
+            second_vertex_idx,
+            third_vertex_idx,
+        })
+    }
+
+    let object_normal = get_object_normal(vertices, assigned_normals, indices_pairs.as_slice());
+    for (vertex_idx, normal_idx) in indices_pairs.iter() {
+        assigned_normals[get_index(*vertex_idx, vertices.len())] += if all_normals {
+            read_normals[get_index(*normal_idx, read_normals.len())].clone()
+        } else {
+            object_normal.clone()
+        }
+    }
+
+    Ok(pseudo_objects)
+}
+
+fn read_light(body: &[&str]) -> Result<Light> {
+    if body.len() != 6 {
+        return Err(anyhow!("Light must have 6 points, got {}", body.len()));
+    }
+
+    let light = Light {
+        position: match read_point(&body[..3]) {
+            Ok(position) => position,
+            Err(err) => return Err(err.context(", reading position")),
+        },
+        intensity: match read_point(&body[..3]) {
+            Ok(intensity) => intensity,
+            Err(err) => return Err(err.context(", reading intensity")),
+        },
+    };
+
+    Ok(light)
+}
+
+pub fn read_scene(file_path: &Path) -> Result<Scene> {
     info!("Reading scene from {}", file_path.display());
     let file = File::open(file_path)
         .unwrap_or_else(|_| panic!("Couldn't open scene file: {}", file_path.display()));
@@ -105,137 +260,87 @@ pub fn read_scene(file_path: &Path) -> Scene {
         if tokens.is_empty() {
             continue;
         }
-        match tokens.as_slice() {
-            ["v", body @ ..] => {
-                vertices.push(read_point(body));
-                assigned_normals.push(Vector3D::default());
-            }
-            ["vt", ..] => continue,
-            ["vn", body @ ..] => read_normals.push(read_point(body)),
-            ["f", body @ ..] => {
-                let indices_pairs = read_indices_pairs(body);
-                assert!(indices_pairs.len() >= 3);
-
-                let no_normals = indices_pairs.iter().all(|(_, normal)| *normal == 0);
-                let all_normals = indices_pairs.iter().all(|(_, normal)| *normal != 0);
-                assert!(
-                    no_normals || all_normals,
-                    "Either all point should have normals or none should"
-                );
-
-                let first_pair = indices_pairs[0];
-                let first_point_idx = if first_pair.0 > 0 {
-                    (first_pair.0 - 1) as usize
-                } else {
-                    (vertices.len() as isize + first_pair.0) as usize
-                };
-                let first_point = vertices[first_point_idx].clone();
-                for i in 1..indices_pairs.len() - 1 {
-                    let second_pair = indices_pairs[i];
-                    let second_point_idx = if second_pair.0 > 0 {
-                        (second_pair.0 - 1) as usize
-                    } else {
-                        (vertices.len() as isize + second_pair.0) as usize
-                    };
-                    let second_point = vertices[second_point_idx].clone();
-
-                    let third_pair = indices_pairs[i + 1];
-                    let third_point_idx = if third_pair.0 > 0 {
-                        (third_pair.0 - 1) as usize
-                    } else {
-                        (vertices.len() as isize + third_pair.0) as usize
-                    };
-                    let third_point = vertices[third_point_idx].clone();
-
-                    if no_normals {
-                        let mut face_normal =
-                            (&second_point - &first_point).cross(&third_point - &first_point);
-                        face_normal.normalize();
-
-                        if &face_normal * &assigned_normals[first_point_idx] < 0.0 {
-                            face_normal = -face_normal;
-                        }
-                        assigned_normals[first_point_idx] += &face_normal / (indices_pairs.len() - 2) as f64;
-
-                        if &face_normal * &assigned_normals[second_point_idx] < 0.0 {
-                            face_normal = -face_normal;
-                        }
-                        if i == 1 {
-                            assigned_normals[second_point_idx] += &face_normal;
-                        } else {
-                            assigned_normals[second_point_idx] += &face_normal / 2.0;
-                        }
-
-                        if &face_normal * &assigned_normals[third_point_idx] < 0.0 {
-                            face_normal = -face_normal;
-                        }
-                        if i == indices_pairs.len() - 2 {
-                            assigned_normals[third_point_idx] += &face_normal;
-                        } else {
-                            assigned_normals[third_point_idx] += &face_normal / 2.0;
-                        }
-
-                    } else {
-                        assigned_normals[first_point_idx] += &read_normals[if first_pair.1 > 0 {
-                            (first_pair.1 - 1) as usize
-                        } else {
-                            (read_normals.len() as isize + first_pair.1) as usize
-                        }];
-                        assigned_normals[second_point_idx] += &read_normals[if second_pair.1 > 0 {
-                            (second_pair.1 - 1) as usize
-                        } else {
-                            (read_normals.len() as isize + second_pair.1) as usize
-                        }];
-                        assigned_normals[third_point_idx] += &read_normals[if third_pair.1 > 0 {
-                            (third_pair.1 - 1) as usize
-                        } else {
-                            (read_normals.len() as isize + third_pair.1) as usize
-                        }];
+        let result = match tokens.as_slice() {
+            ["v", body @ ..] => match read_point(body) {
+                Ok(normal) => {
+                    vertices.push(normal);
+                    assigned_normals.push(Vector3D::default());
+                    anyhow::Ok(())
+                }
+                Err(err) => Err(err.context(", reading vertex")),
+            },
+            ["vt", ..] => Ok(()),
+            ["vn", body @ ..] => match read_point(body) {
+                Ok(normal) => {
+                    read_normals.push(normal);
+                    Ok(())
+                }
+                Err(err) => Err(err.context(", reading normal")),
+            },
+            ["f", body @ ..] => match read_object(
+                body,
+                vertices.as_slice(),
+                read_normals.as_slice(),
+                assigned_normals.as_mut_slice(),
+                &current_material,
+            ) {
+                Ok(ref mut read_pseudo_objects) => {
+                    pseudo_objects.append(read_pseudo_objects);
+                    Ok(())
+                }
+                Err(err) => Err(err.context(", reading object")),
+            },
+            ["mtllib", mtl_filename] => {
+                match read_materials(&file_path.parent().unwrap().join(Path::new(mtl_filename))) {
+                    Ok(read_materials) => {
+                        materials = read_materials;
+                        Ok(())
                     }
-
-                    pseudo_objects.push(PseudoObject {
-                        material: Arc::clone(&current_material),
-                        first_point_idx,
-                        second_point_idx,
-                        third_point_idx,
-                    })
+                    Err(err) => Err(err.context("reading underlying .mtl")),
                 }
             }
-            ["mtllib", mtl_filename] => {
-                materials =
-                    read_materials(&file_path.parent().unwrap().join(Path::new(mtl_filename)))
+            ["usemtl", mtl_name] => {
+                current_material = Arc::clone(&materials[*mtl_name]);
+                Ok(())
             }
-            ["usemtl", mtl_name] => current_material = Arc::clone(&materials[*mtl_name]),
-            ["P", body @ ..] => {
-                lights.push(Light {
-                    position: read_point(&body[..3]),
-                    intensity: read_point(&body[3..]),
-                });
-            }
+            ["P", body @ ..] => match read_light(body) {
+                Ok(light) => {
+                    lights.push(light);
+                    Ok(())
+                }
+                Err(err) => Err(err.context(", reading light")),
+            },
             ["Sky", _, _, sky_filename] => {
                 cube_map = Some(CubeMap::new(
                     &file_path.parent().unwrap().join(Path::new(sky_filename)),
-                ))
+                ));
+                Ok(())
             }
-            [smt, ..] if smt.starts_with('#') => continue,
-            ["g", ..] => continue,
-            ["s", ..] => continue,
-            _ => panic!("Unknown key in line {}", n + 1),
+            [smt, ..] if smt.starts_with('#') => Ok(()),
+            ["g", ..] => Ok(()),
+            ["s", ..] => Ok(()),
+            _ => Err(anyhow!("Unknown .obj key")),
+        };
+
+        match result {
+            Ok(()) => {}
+            Err(err) => return Err(err.context(format!(", on line {}", n))),
         }
     }
 
-    for normal in assigned_normals.iter_mut() {
-        normal.normalize();
-    }
+    let final_normals: Vec<Vector3D> = assigned_normals
+        .iter_mut()
+        .map(|normal| normal.clone().normalize())
+        .collect();
 
     info!("Done reading scene from {}", file_path.display());
 
-    Scene {
+    Ok(Scene {
         objects: pseudo_objects
             .iter()
-            .map(|x| x.build_object(&vertices, &assigned_normals))
+            .map(|x| x.build_object(&vertices, &final_normals))
             .collect(),
         lights,
         cube_map,
-    }
+    })
 }

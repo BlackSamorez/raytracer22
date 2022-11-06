@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
-use crate::geometry::{get_intersection, reflect};
 use crate::geometry::intersection::Intersection;
 use crate::geometry::ray::Ray;
 use crate::geometry::vector::Vector3D;
+use crate::geometry::{get_intersection, reflect};
 use crate::scene::material::Material;
 use crate::scene::Scene;
 
@@ -56,12 +56,12 @@ pub fn calculate_illumination(ray: &Ray, scene: &Scene, ttl: usize) -> Vector3D 
 
         Collision::Polygon(intersection, material) => {
             let reflected_direction = reflect(&ray.direction, &intersection.normal);
-            let reflected_ray = Ray{
-                from: intersection.position.clone(),
+            let reflected_ray = Ray {
+                from: intersection.position,
                 direction: reflected_direction,
                 inside: !ray.inside,
             };
             calculate_illumination(&reflected_ray, scene, ttl - 1)
-        },
+        }
     }
 }

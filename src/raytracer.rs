@@ -1,17 +1,18 @@
-mod illumination;
-mod ray_caster;
-
-use image::RgbImage;
-use indicatif::ProgressIterator;
 use std::borrow::Borrow;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
 
-use crate::geometry::vector::Vector3D;
-use crate::raytracer::illumination::calculate_illumination;
+use image::RgbImage;
+use indicatif::ProgressIterator;
+
 use ray_caster::RayCaster;
 
+use crate::geometry::vector::Vector3D;
+use crate::raytracer::illumination::calculate_illumination;
 use crate::scene::Scene;
+
+mod illumination;
+mod ray_caster;
 
 pub struct Raytracer {
     scene: Scene,
@@ -22,8 +23,9 @@ pub struct Raytracer {
 impl Raytracer {
     pub fn new(scene_path: &Path, ray_caster_path: &Path) -> Self {
         let ray_caster = RayCaster::new(ray_caster_path);
+        let scene = Scene::try_read(scene_path).unwrap();
         Self {
-            scene: Scene::new(scene_path),
+            scene,
             data: Arc::new(RwLock::new(vec![
                 Vector3D::default();
                 (ray_caster.width * ray_caster.height)
