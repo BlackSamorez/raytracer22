@@ -8,7 +8,8 @@ pub struct Ray {
 }
 
 impl Ray {
-    fn propagate(&mut self, distance: f64) {
+    pub fn propagate(mut self, distance: f64) -> Self {
         self.from += &(&self.direction * distance);
+        self
     }
 }
