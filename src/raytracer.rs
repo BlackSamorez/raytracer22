@@ -1,13 +1,15 @@
 use std::borrow::Borrow;
+use std::cmp::min;
 use std::path::Path;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 use std::sync::{Arc, RwLock};
 use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
 use image::RgbImage;
-use indicatif::ProgressIterator;
+use indicatif::{ProgressBar, ProgressIterator};
 use log::info;
 
 use ray_caster::RayCaster;
@@ -18,6 +20,8 @@ use crate::scene::Scene;
 
 mod illumination;
 mod ray_caster;
+
+static NUM_WORKERS: usize = 8;
 
 struct ImageBuffer {
     width: usize,
@@ -71,41 +75,61 @@ impl Raytracer {
         }
     }
 
-    fn trace_full_image(
+    fn trace_section_of_image(
+        lines_done: Arc<AtomicUsize>,
         scene: Arc<Scene>,
         image_buffer: Arc<RwLock<ImageBuffer>>,
         ray_caster: Arc<RayCaster>,
+        section_number: usize,
+        number_of_sections: usize,
     ) {
-        for x in (0..ray_caster.width).progress() {
+        let image_width = ray_caster.width;
+        let section_width = (image_width - 1) / number_of_sections + 1;
+        let start = section_width * section_number;
+        let end = min(section_width * (section_number + 1), image_width);
+        for x in start..end {
             for y in 0..ray_caster.height {
-                Self::set_pixel(
-                    Arc::clone(&image_buffer),
-                    x,
-                    y,
-                    calculate_illumination(&ray_caster.cast_ray(x, y), scene.borrow(), 10),
-                );
+                let illumination =
+                    calculate_illumination(&ray_caster.cast_ray(x, y), scene.borrow(), 10);
+                Self::set_pixel(Arc::clone(&image_buffer), x, y, illumination);
             }
+            lines_done.fetch_add(1, Release);
         }
     }
 
-    fn start_worker_process(
-        done: Arc<AtomicBool>,
+    fn start_workers(
+        lines_done: Arc<AtomicUsize>,
         scene: Arc<Scene>,
         image_buffer: Arc<RwLock<ImageBuffer>>,
         ray_caster: Arc<RayCaster>,
-    ) -> JoinHandle<()> {
-        thread::spawn(move || {
-            Self::trace_full_image(scene, image_buffer, ray_caster);
-            done.store(true, std::sync::atomic::Ordering::Release);
-        })
+    ) -> Vec<JoinHandle<()>> {
+        let mut handles = vec![];
+        for worker_idx in 0..NUM_WORKERS {
+            let lines_done = Arc::clone(&lines_done);
+            let scene = Arc::clone(&scene);
+            let image_buffer = Arc::clone(&image_buffer);
+            let ray_caster = Arc::clone(&ray_caster);
+            handles.push(thread::spawn(move || {
+                Self::trace_section_of_image(
+                    lines_done,
+                    scene,
+                    image_buffer,
+                    ray_caster,
+                    worker_idx,
+                    NUM_WORKERS,
+                );
+            }));
+        }
+        handles
     }
 
     fn start_dumper_thread(
-        done: Arc<AtomicBool>,
+        lines_done: Arc<AtomicUsize>,
+        lines_total: usize,
         image_buffer: Arc<RwLock<ImageBuffer>>,
     ) -> JoinHandle<()> {
         thread::spawn(move || {
-            while !done.load(std::sync::atomic::Ordering::Acquire) {
+            while lines_done.load(Acquire) != lines_total {
                 thread::sleep(Duration::from_secs(10));
                 info!("Saving image");
                 Self::save_image(Arc::clone(&image_buffer), "intermediate.png");
@@ -124,19 +148,35 @@ impl Raytracer {
         );
         Self::save_image(Arc::clone(&self.image_buffer), "intermediate.png");
 
-        let done = Arc::new(AtomicBool::new(false));
+        let lines_done = Arc::new(AtomicUsize::new(0));
 
-        let worker_thread = Self::start_worker_process(
-            Arc::clone(&done),
+        let mut workers_handles = Self::start_workers(
+            Arc::clone(&lines_done),
             Arc::clone(&self.scene),
             Arc::clone(&self.image_buffer),
             Arc::clone(&self.ray_caster),
         );
-        let dumper_thread =
-            Self::start_dumper_thread(Arc::clone(&done), Arc::clone(&self.image_buffer));
+        let dumper_thread = Self::start_dumper_thread(
+            Arc::clone(&lines_done),
+            self.ray_caster.width,
+            Arc::clone(&self.image_buffer),
+        );
 
         info!("Tracing objects");
-        worker_thread.join().unwrap();
+
+        let bar = ProgressBar::new(self.ray_caster.width as u64);
+        bar.set_message("lines done");
+
+        while lines_done.load(Relaxed) != self.ray_caster.width {
+            bar.set_position(lines_done.load(Relaxed) as u64);
+            thread::sleep(Duration::from_secs(1));
+        }
+        bar.set_position(self.ray_caster.width as u64);
+
+        while !workers_handles.is_empty() {
+            let handle = workers_handles.remove(0); // moves it into cur_thread
+            handle.join().unwrap();
+        }
         dumper_thread.join().unwrap();
         info!("Tracing done");
     }
