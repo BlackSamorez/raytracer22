@@ -20,18 +20,9 @@ fn read_point(triplet: &[&str]) -> Result<Vector3D> {
     }
 
     let vec = Vector3D {
-        x: match triplet[0].parse() {
-            Ok(val) => val,
-            Err(err) => return Err(anyhow::Error::from(err).context("reading x")),
-        },
-        y: match triplet[1].parse() {
-            Ok(val) => val,
-            Err(err) => return Err(anyhow::Error::from(err).context("reading y")),
-        },
-        z: match triplet[2].parse() {
-            Ok(val) => val,
-            Err(err) => return Err(anyhow::Error::from(err).context("reading z")),
-        },
+        x: triplet[0].parse()?,
+        y: triplet[1].parse()?,
+        z: triplet[2].parse()?,
     };
     Ok(vec)
 }
@@ -48,6 +39,10 @@ fn read_indices_pairs(face_elements: &[&str]) -> Vec<(isize, isize)> {
     }
 
     result
+}
+
+fn add_line_context(error: anyhow::Error, file: &Path, line: usize) -> anyhow::Error {
+    error.context(format!("on line {} of {}", line, file.display()))
 }
 
 fn read_materials(materials_path: &Path) -> Result<HashMap<String, Arc<Material>>> {
@@ -67,7 +62,7 @@ fn read_materials(materials_path: &Path) -> Result<HashMap<String, Arc<Material>
             continue;
         }
 
-        let result = match tokens.as_slice() {
+        let line_parse_result = match tokens.as_slice() {
             ["newmtl", name] => {
                 if current_material_started {
                     // Save previous material
@@ -78,69 +73,36 @@ fn read_materials(materials_path: &Path) -> Result<HashMap<String, Arc<Material>
                 current_material.name = (*name).to_owned();
                 anyhow::Ok(())
             }
-            ["Ka", body @ ..] => match read_point(body) {
-                Ok(vec) => {
-                    current_material.ambient_color = vec;
-                    Ok(())
+            [key, body @ ..]
+                if *key == "Ka" || *key == "Kd" || *key == "Ks" || *key == "Ke" || *key == "al" =>
+            {
+                let triplet = read_point(body)?;
+                match *key {
+                    "Ka" => current_material.ambient_color = triplet,
+                    "Kd" => current_material.diffuse_color = triplet,
+                    "Ks" => current_material.specular_color = triplet,
+                    "Ke" => current_material.intensity = triplet,
+                    "al" => current_material.albedo = triplet,
+                    _ => unreachable!(),
                 }
-                Err(err) => Err(err.context("reading ambient_color")),
-            },
-            ["Kd", body @ ..] => match read_point(body) {
-                Ok(vec) => {
-                    current_material.diffuse_color = vec;
-                    Ok(())
-                }
-                Err(err) => Err(err.context("reading diffuse_color")),
-            },
-            ["Ks", body @ ..] => match read_point(body) {
-                Ok(vec) => {
-                    current_material.specular_color = vec;
-                    Ok(())
-                }
-                Err(err) => Err(err.context("reading specular_color")),
-            },
-            ["Ke", body @ ..] => match read_point(body) {
-                Ok(vec) => {
-                    current_material.intensity = vec;
-                    Ok(())
-                }
-                Err(err) => Err(err.context("reading intensity")),
-            },
-            ["Ns", exponent] => match exponent.parse() {
-                Ok(exp) => {
-                    current_material.specular_exponent = exp;
-                    Ok(())
-                }
-                Err(err) => Err(anyhow::Error::from(err).context("reading specular_exponent")),
-            },
-            ["Ni", index] => match index.parse() {
-                Ok(exp) => {
-                    current_material.refraction_index = exp;
-                    Ok(())
-                }
-                Err(err) => Err(anyhow::Error::from(err).context("reading refraction_index")),
-            },
-            ["al", body @ ..] => match read_point(body) {
-                Ok(vec) => {
-                    current_material.albedo = vec;
-                    Ok(())
-                }
-                Err(err) => Err(err.context("reading albedo")),
-            },
+                Ok(())
+            }
+            ["Ns", exponent] => {
+                current_material.specular_exponent = exponent.parse()?;
+                Ok(())
+            }
+            ["Ni", index] => {
+                current_material.refraction_index = index.parse()?;
+                Ok(())
+            }
             ["illum", ..] => Ok(()),
             [smt, ..] if smt.starts_with('#') => Ok(()),
             _ => Err(anyhow!("Unknown .mtl key")),
         };
 
-        match result {
+        match line_parse_result {
             Ok(()) => {}
-            Err(err) => {
-                return Err(err.context(format!(
-                    "on line {} of {}",
-                    n + 1,
-                    materials_path.display()
-                )))
-            }
+            Err(err) => return Err(add_line_context(err, materials_path, n + 1)),
         }
     }
     if current_material_started {
@@ -266,7 +228,7 @@ pub fn read_scene(file_path: &Path) -> Result<Scene> {
         if tokens.is_empty() {
             continue;
         }
-        let result = match tokens.as_slice() {
+        let line_parse_result = match tokens.as_slice() {
             ["v", body @ ..] => match read_point(body) {
                 Ok(normal) => {
                     vertices.push(normal);
@@ -328,11 +290,9 @@ pub fn read_scene(file_path: &Path) -> Result<Scene> {
             _ => Err(anyhow!("Unknown .obj key")),
         };
 
-        match result {
+        match line_parse_result {
             Ok(()) => {}
-            Err(err) => {
-                return Err(err.context(format!("on line {} of {}", n + 1, file_path.display())))
-            }
+            Err(err) => return Err(add_line_context(err, file_path, n + 1)),
         }
     }
 

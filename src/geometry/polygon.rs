@@ -11,12 +11,6 @@ pub struct Polygon {
 }
 
 impl Polygon {
-    pub fn area(&self) -> f64 {
-        (&self.second_point - &self.first_point)
-            .cross(&(&self.third_point - &self.first_point))
-            .len()
-    }
-
     pub fn weighted_normal(&self, x: &Vector3D) -> Vector3D {
         let area_abx = (&self.second_point - &self.first_point)
             .cross(&(&self.second_point - x))

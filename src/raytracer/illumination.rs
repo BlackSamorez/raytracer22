@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::geometry::intersection::Intersection;
 use crate::geometry::ray::Ray;
 use crate::geometry::vector::Vector3D;
-use crate::geometry::{EPSILON, get_intersection, reflect};
+use crate::geometry::{get_intersection, reflect, EPSILON};
 use crate::scene::material::Material;
 use crate::scene::Scene;
 
@@ -59,18 +59,35 @@ pub fn calculate_illumination(ray: &Ray, scene: &Scene, ttl: usize) -> Vector3D 
                 from: intersection.position,
                 direction: ray.direction.clone(),
                 inside: !ray.inside,
-            }.propagate(EPSILON);
+            }
+            .propagate(EPSILON);
             calculate_illumination(&phased_ray, scene, ttl - 1)
         }
 
-        Collision::Polygon(intersection, _) => {
-            let reflected_direction = reflect(&ray.direction, &intersection.normal);
-            let reflected_ray = Ray {
-                from: intersection.position,
-                direction: reflected_direction,
-                inside: !ray.inside,
-            }.propagate(EPSILON);
-            calculate_illumination(&reflected_ray, scene, ttl - 1)
+        Collision::Polygon(intersection, material) => {
+            let mut illumination = material.intensity.clone() + material.ambient_color.clone();
+
+            if material.albedo.y != 0.0 {
+                // reflected
+                let reflected_direction = reflect(&ray.direction, &intersection.normal);
+                let reflected_ray = Ray {
+                    from: intersection.position,
+                    direction: reflected_direction,
+                    inside: !ray.inside,
+                }
+                .propagate(EPSILON);
+                illumination +=
+                    calculate_illumination(&reflected_ray, scene, ttl - 1) * material.albedo.y;
+            }
+
+            illumination
         }
+    }
+}
+
+pub fn get_sky(ray: &Ray, scene: &Scene) -> Vector3D {
+    match scene.cube_map {
+        None => Vector3D::default(),
+        Some(ref cube_map) => cube_map.trace(ray),
     }
 }

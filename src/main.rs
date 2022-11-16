@@ -37,9 +37,5 @@ fn main() {
     let ray_caster_path = Path::new(&ray_caster_path);
 
     let mut raytracer = Raytracer::new(scene_path, ray_caster_path);
-    let result = raytracer.raytrace();
-
-    result
-        .save(Path::new("result.png"))
-        .expect("Couldn't save image");
+    raytracer.raytrace();
 }

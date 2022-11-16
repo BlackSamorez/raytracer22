@@ -52,16 +52,6 @@ pub fn get_intersection(ray: &Ray, polygon: &Polygon) -> Option<Intersection> {
     })
 }
 
-pub fn refract(direction_in: &Vector3D, normal: &Vector3D, eta: f64) -> Option<Vector3D> {
-    let c = -(normal * direction_in);
-    let cosine2 = eta * eta * (1.0 - c * c);
-    if cosine2 > 1.0 {
-        None
-    } else {
-        Some(direction_in * eta + normal * (eta * c - cosine2.sqrt()))
-    }
-}
-
 pub fn reflect(direction_in: &Vector3D, normal: &Vector3D) -> Vector3D {
     direction_in - normal * 2.0 * (normal * direction_in)
 }

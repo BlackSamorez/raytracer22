@@ -102,9 +102,9 @@ impl CubeMap {
         let color = self.img.get_pixel(x, y).0;
 
         Vector3D {
-            x: color[0] as f64,
-            y: color[1] as f64,
-            z: color[2] as f64,
+            x: color[0] as f64 / 256.,
+            y: color[1] as f64 / 256.,
+            z: color[2] as f64 / 256.,
         }
     }
 }
