@@ -105,19 +105,21 @@ impl Raytracer {
     ) -> Vec<JoinHandle<()>> {
         let mut handles = vec![];
         for worker_idx in 0..NUM_WORKERS {
-            let lines_done = Arc::clone(&lines_done);
-            let scene = Arc::clone(&scene);
-            let image_buffer = Arc::clone(&image_buffer);
-            let ray_caster = Arc::clone(&ray_caster);
-            handles.push(thread::spawn(move || {
-                Self::trace_section_of_image(
-                    lines_done,
-                    scene,
-                    image_buffer,
-                    ray_caster,
-                    worker_idx,
-                    NUM_WORKERS,
-                );
+            handles.push(thread::spawn({
+                let lines_done = Arc::clone(&lines_done);
+                let scene = Arc::clone(&scene);
+                let image_buffer = Arc::clone(&image_buffer);
+                let ray_caster = Arc::clone(&ray_caster);
+                move || {
+                    Self::trace_section_of_image(
+                        lines_done,
+                        scene,
+                        image_buffer,
+                        ray_caster,
+                        worker_idx,
+                        NUM_WORKERS,
+                    );
+                }
             }));
         }
         handles
@@ -130,7 +132,7 @@ impl Raytracer {
     ) -> JoinHandle<()> {
         thread::spawn(move || {
             while lines_done.load(Acquire) != lines_total {
-                thread::sleep(Duration::from_secs(10));
+                thread::sleep(Duration::from_secs((10 * lines_total / 250) as u64)); // heuristic
                 info!("Saving image");
                 Self::save_image(Arc::clone(&image_buffer), "intermediate.png");
             }
