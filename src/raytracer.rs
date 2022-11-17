@@ -11,6 +11,7 @@ use std::time::Duration;
 use image::RgbImage;
 use indicatif::{ProgressBar, ProgressIterator};
 use log::info;
+use threadpool::ThreadPool;
 
 use ray_caster::RayCaster;
 
@@ -22,6 +23,7 @@ mod illumination;
 mod ray_caster;
 
 static NUM_WORKERS: usize = 8;
+static CHUNK_SIZE: usize = 16;
 
 struct ImageBuffer {
     width: usize,
@@ -97,15 +99,19 @@ impl Raytracer {
         }
     }
 
-    fn start_workers(
+    fn start_worker_pool(
         lines_done: Arc<AtomicUsize>,
         scene: Arc<Scene>,
         image_buffer: Arc<RwLock<ImageBuffer>>,
         ray_caster: Arc<RayCaster>,
-    ) -> Vec<JoinHandle<()>> {
-        let mut handles = vec![];
-        for worker_idx in 0..NUM_WORKERS {
-            handles.push(thread::spawn({
+    ) -> ThreadPool {
+        let width = ray_caster.width;
+        let num_chunks = (width - 1) / CHUNK_SIZE + 1;
+
+        let pool = ThreadPool::new(NUM_WORKERS);
+
+        for chunk_idx in 0..num_chunks {
+            pool.execute({
                 let lines_done = Arc::clone(&lines_done);
                 let scene = Arc::clone(&scene);
                 let image_buffer = Arc::clone(&image_buffer);
@@ -116,13 +122,13 @@ impl Raytracer {
                         scene,
                         image_buffer,
                         ray_caster,
-                        worker_idx,
-                        NUM_WORKERS,
+                        chunk_idx,
+                        num_chunks,
                     );
                 }
-            }));
+            });
         }
-        handles
+        pool
     }
 
     fn start_dumper_thread(
@@ -152,7 +158,7 @@ impl Raytracer {
 
         let lines_done = Arc::new(AtomicUsize::new(0));
 
-        let mut workers_handles = Self::start_workers(
+        let workers_pool = Self::start_worker_pool(
             Arc::clone(&lines_done),
             Arc::clone(&self.scene),
             Arc::clone(&self.image_buffer),
@@ -175,10 +181,7 @@ impl Raytracer {
         }
         bar.set_position(self.ray_caster.width as u64);
 
-        while !workers_handles.is_empty() {
-            let handle = workers_handles.remove(0); // moves it into cur_thread
-            handle.join().unwrap();
-        }
+        workers_pool.join();
         dumper_thread.join().unwrap();
         info!("Tracing done");
     }
